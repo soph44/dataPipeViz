@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  airflow-webserver:
+    image: apache/airflow:2.7.0
+    container_name: airflow-webserver
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:admin@postgres:5432/airflow_db
+      - AIRFLOW__CORE__FERNET_KEY=7DpTsIBtiSaLntRbObg-PPSJrLLmcQhqAtG6QffU8_s=
+      - AIRFLOW__WEBSERVER__SECRET_KEY=a7140ee46e67ee9fd839578307391b12941faba47149c34f
+      - AIRFLOW__WEBSERVER__BASE_URL=http://localhost:8080
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
+      - AIRFLOW__CELERY__RESULT_BACKEND=redis://redis:6379/0
+      - AIRFLOW__WEBSERVER__DEFAULT_USER_USERNAME=admin  # Set admin username
+      - AIRFLOW__WEBSERVER__DEFAULT_USER_PASSWORD=admin # Set admin password
+    ports:
+      - "8080:8080"
+    networks:
+      - airflow-network
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./dags:/opt/airflow/dags
+    command: ["bash", "-c", "airflow db init && airflow webserver"]
+
+  airflow-scheduler:
+    image: apache/airflow:2.7.0
+    container_name: airflow-scheduler
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:admin@postgres:5432/airflow_db
+      - AIRFLOW__CORE__FERNET_KEY=7DpTsIBtiSaLntRbObg-PPSJrLLmcQhqAtG6QffU8_s=
+      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
+      - AIRFLOW__CELERY__RESULT_BACKEND=redis://redis:6379/0
+    networks:
+      - airflow-network
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./dags:/opt/airflow/dags
+    command: ["bash", "-c", "airflow db init && airflow scheduler"]
+
+  airflow-worker:
+    image: apache/airflow:2.7.0
+    container_name: airflow-worker
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:admin@postgres:5432/airflow_db
+      - AIRFLOW__CORE__FERNET_KEY=7DpTsIBtiSaLntRbObg-PPSJrLLmcQhqAtG6QffU8_s=
+      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
+      - AIRFLOW__CELERY__RESULT_BACKEND=redis://redis:6379/0
+    networks:
+      - airflow-network
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./dags:/opt/airflow/dags
+    command: ["celery", "worker"]
+
+  airflow-flower:
+    image: apache/airflow:2.7.0
+    container_name: airflow-flower
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
+    ports:
+      - "5555:5555"
+    networks:
+      - airflow-network
+    depends_on:
+      - redis
+    command: ["celery", "flower"]
+
+  postgres:
+    image: postgres:13
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_DB=airflow_db
+    networks:
+      - airflow-network
+    volumes:
+      - airflow-postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    networks:
+      - airflow-network
+
+networks:
+  airflow-network:
+    driver: bridge
+
+volumes:
+  airflow-postgres-data:
